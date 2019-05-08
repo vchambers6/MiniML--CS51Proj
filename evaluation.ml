@@ -45,26 +45,54 @@ module Env : Env_type =
     (* Creates a closure from an expression and the environment it's
        defined in *)
     let close (exp : expr) (env : env) : value =
-      failwith "close not implemented" ;;
+      Closure (exp, env) ;;
 
     (* Looks up the value of a variable in the environment *)
-    let lookup (env : env) (varname : varid) : value =
-      failwith "lookup not implemented" ;;
+    
+    let lookup (env : env) (varname : varid) : value = 
+      try !(List.assoc varname env) 
+      with 
+      | _ -> raise (EvalError "var not found") ;;
 
     (* Returns a new environment just like env except that it maps the
        variable varid to loc *)
-    let extend (env : env) (varname : varid) (loc : value ref) : env =
-      failwith "extend not implemented" ;;
+    let rec extend (env : env) (varname : varid) (loc : value ref) : env =
+      match env with 
+      | (a, b) :: tl -> 
+          if a = varname 
+            then (b := !loc; (a, b) :: tl)
+          else (varname, loc) :: env
+      | [] -> (varname, loc) :: env ;;
 
     (* Returns a printable string representation of a value; the flag
        printenvp determines whether to include the environment in the
        string representation when called on a closure *)
-    let value_to_string ?(printenvp : bool = true) (v : value) : string =
-      failwith "value_to_string not implemented" ;;
+    
 
     (* Returns a printable string representation of an environment *)
-    let env_to_string (env : env) : string =
-      failwith "env_to_string not implemented" ;;
+    let rec env_to_string (env : env) : string =
+      "[" ^ 
+      
+      let rec helper (env : env ) : string = 
+        (match env with 
+        | (a, b) :: tl ->  (match !b with 
+        | Val c ->  "{" ^ a ^ " |-> " ^ (exp_to_concrete_string c) ^ "}" ^ "; " ^ (helper tl)
+        | Closure (d, e) -> "{" ^ a ^ " |-> " ^ ((exp_to_concrete_string d) ^ " -> " ^ helper e)
+                             ^ "}" ^ "; " ^ (helper tl) )
+        | [] -> "" )
+      in
+      (helper env) ^ "]" ;;
+
+    let rec value_to_string ?(printenvp : bool = true) (v : value) : string =
+      (* how should i use printevp ???*)  
+      match v with
+      | Val a -> exp_to_concrete_string a 
+      | Closure (a, b) -> 
+          if printenvp 
+            then (env_to_string b) ^ "(" ^ (exp_to_concrete_string a) ^ ")"
+          else   
+            "(" ^ (exp_to_concrete_string a) ^ ")" ;;
+
   end
 ;;
 
@@ -115,7 +143,7 @@ let eval_s (exp : expr) (_env : Env.env) : Env.value =
             | Binop (a, b, c) -> (match eval_s_solve (Binop (a, b, c)) with 
                 | Num n -> Num (~-n)
                 | Bool boo -> Bool (not boo)
-                | _ -> raise (EvalError "type error uop")  )
+                | _ -> raise (EvalError "Type Error Unary Operator")  )
             | _ -> eval_s_solve e1 ) (* HELP *)
       | Binop (bop, e1, e2) -> 
         (match eval_s_solve e1, eval_s_solve e2 with 
@@ -130,54 +158,92 @@ let eval_s (exp : expr) (_env : Env.env) : Env.value =
             (match bop with 
             | Equals -> Bool (b1 = b2)
             | LessThan -> Bool (b1 < b2)
-            | _ -> raise (EvalError "type error bop") )
-        | _ -> raise (EvalError "type error bop")  
+            | _ -> raise (EvalError "Type Error") )
+        | _ -> raise (EvalError "Type Error")  
         )
       | Conditional (e1, e2, e3) -> if ((eval_s_solve e1) = (Bool true)) then (eval_s_solve e2) else 
                                     (eval_s_solve e3)
-      | Fun (v, e1) -> exp
+      | Fun (_v, _e1) -> exp
       | Let (v, e1, e2) -> eval_s_solve (subst v (eval_s_solve e1) e2)
 
-
       | Letrec (v, e1, e2) -> (let ve1 = (eval_s_solve e1) in let a = subst v (Letrec (v, ve1, Var(v))) ve1 in 
-        eval_s_solve (subst v a e2) )
-
-
-      (*eval_s_solve (subst v (subst v (Letrec (v, e1, e2)) e1) e2) *)
-
+        eval_s_solve (subst v a e2) ) (* CAN SIMPLIFY *)
 
       | Raise -> raise (Invalid_argument "doesnt work idk")
       | Unassigned -> raise (EvalError "Unbound value")
-      | App (f, q) ->
-          (match eval_s_solve f with
-          | Fun(def, body) -> eval_s_solve (subst def (eval_s_solve q) body)
+      | App (e1, e2) ->
+          (match eval_s_solve e1 with
+          | Fun(e3, e4) -> eval_s_solve (subst e3 (eval_s_solve e2) e4)
           | _ -> raise (EvalError "type error app ")
           )
   in
   Val (eval_s_solve exp)
 ;;
 
-  (*) | Let (y, def, body) ->
-        if y = var_name
-        then Let (y, sub def, body)
-        else Let (y, sub def, sub body)
-
-| Letrec (y, def, body) ->
-        if y = var_name
-        then Letrec (y, def, body)
-        else Letrec (y, sub def, sub body)*)
-     
-     (*) let rec eval_s_subst (exp : expr) (env : Env.env) : expr = 
-    match env with (*
-    | [] -> exp *) 
-    | (a, b) :: tl -> eval_s_subst (subst a b exp) tl (*honestly this prob wont work 
-    i should match b, the valu ref with two cases bc it could be a val or closure *)
-  in *)
 (* The DYNAMICALLY-SCOPED ENVIRONMENT MODEL evaluator -- to be
    completed *)
    
-let eval_d (_exp : expr) (_env : Env.env) : Env.value =
-  failwith "eval_d not implemented" ;;
+
+let eval_d (exp : expr) (env : Env.env) : Env.value = 
+
+  let rec eval (exp : expr) (env : Env.env) : Env.value = 
+  print_endline (exp_to_abstract_string exp); 
+  print_endline (Env.env_to_string env);
+  match exp with 
+    | Var v -> Env.lookup env v 
+    | Num _ | Bool _ | Raise | Unassigned | Fun (_, _) -> Env.Val exp
+    | Unop (uop, e1) -> 
+        (match uop with 
+        | Negate ->(
+          match e1 with 
+          | Num n -> Env.Val (Num ~-n)
+          | Bool boo -> Env.Val (Bool (not boo)) 
+          | _ -> raise (EvalError "Type Error Unary") ) 
+
+        | _ -> eval exp env)
+    | Binop (bop, e1, e2) ->
+        (match eval e1 env, eval e2 env with 
+        | Env.Val (Num n1), Env.Val (Num n2) ->
+          (match bop with 
+          | Plus -> Env.Val (Num (( + ) n1 n2))
+          | Minus -> Env.Val (Num (( - ) n1 n2))
+          | Times -> Env.Val (Num (( * ) n1 n2))
+          | Equals -> Env.Val (Bool (n1 = n2))
+          | LessThan -> Env.Val (Bool (n1 < n2))
+          )
+        | Env.Val (Bool b1), Env.Val (Bool b2) ->
+          (match bop with 
+          | Equals -> Env.Val (Bool (b1 = b2))
+          | LessThan -> Env.Val (Bool (b1 < b2))
+          | _ -> raise (EvalError "Binop type error")
+          )
+        | _ -> raise (EvalError "wrong")
+      )
+    | Conditional (e1, e2, e3) -> if ((eval e1 env) = (Env.Val (Bool 
+        true))) then (eval e2 env) else (eval e3 env)
+    | Let (v, e1, e2) -> 
+        (match eval e1 env with 
+        | Env.Val v2 -> eval e2 (Env.extend env v (ref (Env.Val v2)))  
+        | Env.Closure _ -> raise (EvalError "Closure found")
+
+        )
+    | Letrec (v, e1, e2) ->
+      (match eval e1 env with 
+      | Env.Val _ -> eval e2 (Env.extend env v ( ref  (eval e1 (Env.extend env v (ref (Env.Val(Letrec (v, e1, e2)))))) ))
+      | Env.Closure _ -> raise (EvalError "Closure found")
+      )
+    | App (e1, e2) ->
+        (match eval e1 env with 
+        | Env.Val (Fun (v, e3)) -> 
+            (match eval e2 env with 
+            | Env.Val v2 -> eval e3 (Env.extend env v (ref (Env.Val v2))) 
+            | Env.Closure _ -> raise (EvalError "nooo")
+            )
+        | _ -> raise (EvalError "nooo") 
+        )
+  in 
+
+  eval exp env ;; 
        
 (* The LEXICALLY-SCOPED ENVIRONMENT MODEL evaluator -- optionally
    completed as (part of) your extension *)
@@ -201,4 +267,4 @@ let eval_e _ =
    above, not the evaluate function, so it doesn't matter how it's set
    when you submit your solution.) *)
    
-let evaluate = eval_s ;;
+let evaluate = eval_d;;
