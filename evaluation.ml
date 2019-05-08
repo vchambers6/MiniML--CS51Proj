@@ -99,9 +99,80 @@ let eval_t (exp : expr) (_env : Env.env) : Env.value =
 
 (* The SUBSTITUTION MODEL evaluator -- to be completed *)
    
-let eval_s (_exp : expr) (_env : Env.env) : Env.value =
-  failwith "eval_s not implemented" ;;
+let eval_s (exp : expr) (_env : Env.env) : Env.value =
+  let rec eval_s_solve (exp : expr) : expr = 
+    print_endline (exp_to_abstract_string exp); 
+    match exp with 
+      | Var v -> Unassigned (*i think this should raise an error *)
+      | Num n -> exp 
+      | Bool b -> exp
+      | Unop (uop, e1) -> 
+        (match uop with 
+        | Negate -> 
+            match e1 with 
+            | Num n -> Num (~-n)
+            | Bool b -> Bool (not b) 
+            | Binop (a, b, c) -> (match eval_s_solve (Binop (a, b, c)) with 
+                | Num n -> Num (~-n)
+                | Bool boo -> Bool (not boo)
+                | _ -> raise (EvalError "type error uop")  )
+            | _ -> eval_s_solve e1 ) (* HELP *)
+      | Binop (bop, e1, e2) -> 
+        (match eval_s_solve e1, eval_s_solve e2 with 
+        | Num n1, Num n2 -> 
+            (match bop with 
+            | Plus -> Num (( + ) n1 n2)
+            | Minus -> Num (( - ) n1 n2)
+            | Times -> Num (( * ) n1 n2)
+            | Equals -> Bool (n1 = n2)
+            | LessThan -> Bool (n1 < n2) )
+        | Bool b1, Bool b2 -> 
+            (match bop with 
+            | Equals -> Bool (b1 = b2)
+            | LessThan -> Bool (b1 < b2)
+            | _ -> raise (EvalError "type error bop") )
+        | _ -> raise (EvalError "type error bop")  
+        )
+      | Conditional (e1, e2, e3) -> if ((eval_s_solve e1) = (Bool true)) then (eval_s_solve e2) else 
+                                    (eval_s_solve e3)
+      | Fun (v, e1) -> exp
+      | Let (v, e1, e2) -> eval_s_solve (subst v (eval_s_solve e1) e2)
+
+
+      | Letrec (v, e1, e2) -> (let ve1 = (eval_s_solve e1) in let a = subst v (Letrec (v, ve1, Var(v))) ve1 in 
+        eval_s_solve (subst v a e2) )
+
+
+      (*eval_s_solve (subst v (subst v (Letrec (v, e1, e2)) e1) e2) *)
+
+
+      | Raise -> raise (Invalid_argument "doesnt work idk")
+      | Unassigned -> raise (EvalError "Unbound value")
+      | App (f, q) ->
+          (match eval_s_solve f with
+          | Fun(def, body) -> eval_s_solve (subst def (eval_s_solve q) body)
+          | _ -> raise (EvalError "type error app ")
+          )
+  in
+  Val (eval_s_solve exp)
+;;
+
+  (*) | Let (y, def, body) ->
+        if y = var_name
+        then Let (y, sub def, body)
+        else Let (y, sub def, sub body)
+
+| Letrec (y, def, body) ->
+        if y = var_name
+        then Letrec (y, def, body)
+        else Letrec (y, sub def, sub body)*)
      
+     (*) let rec eval_s_subst (exp : expr) (env : Env.env) : expr = 
+    match env with (*
+    | [] -> exp *) 
+    | (a, b) :: tl -> eval_s_subst (subst a b exp) tl (*honestly this prob wont work 
+    i should match b, the valu ref with two cases bc it could be a val or closure *)
+  in *)
 (* The DYNAMICALLY-SCOPED ENVIRONMENT MODEL evaluator -- to be
    completed *)
    
@@ -130,4 +201,4 @@ let eval_e _ =
    above, not the evaluate function, so it doesn't matter how it's set
    when you submit your solution.) *)
    
-let evaluate = eval_t ;;
+let evaluate = eval_s ;;
