@@ -20,6 +20,7 @@
 %token RAISE
 %token <string> ID
 %token <int> INT 
+%token <float> DEC
 %token TRUE FALSE
 
 %nonassoc LESSTHAN
@@ -39,6 +40,7 @@ exp:    exp expnoapp            { App($1, $2) }
         | expnoapp              { $1 }
 
 expnoapp: INT                   { Num $1 }
+        | DEC                   { Float $1 }
         | TRUE                  { Bool true }
         | FALSE                 { Bool false }
         | ID                    { Var $1 }

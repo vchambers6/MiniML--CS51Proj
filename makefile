@@ -1,6 +1,6 @@
-all: evaluation miniml expr
+all: evaluation miniml expr tests
 
-evaluation: evalutaion.ml 
+evaluation: evaluation.ml 
 	ocamlbuild evaluation.byte
 
 miniml: miniml.ml
@@ -8,6 +8,9 @@ miniml: miniml.ml
 
 expr: expr.ml
 	ocamlbuild expr.byte
+
+tests: tests.ml
+	ocamlbuild tests.byte
 
 clean:
 	rm -rf _build *.byte
