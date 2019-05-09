@@ -7,7 +7,7 @@ open Expr;;
 let env = Env.create () ;;
 
 (* VALUES FOR EVALUATION FUNCTION TESTS *)
-let simpletest = Num(1) (* 1 + 1*) ;;
+let simpletest = Num(1) (*1*) ;;
 let eval_s_simp = eval_s simpletest env ;;
 let eval_d_simp = eval_d simpletest env ;;
 let eval_l_simp = eval_l simpletest env ;; 

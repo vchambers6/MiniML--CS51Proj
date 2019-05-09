@@ -56,7 +56,7 @@ module Env : Env_type =
 
     (* Returns a new environment just like env except that it maps the
        variable varid to loc *)
-    let rec extend (env : env) (varname : varid) (loc : value ref) : env =
+    let extend (env : env) (varname : varid) (loc : value ref) : env =
       match env with 
       | (a, b) :: tl -> 
           if a = varname 
@@ -70,7 +70,7 @@ module Env : Env_type =
     
 
     (* Returns a printable string representation of an environment *)
-    let rec env_to_string (env : env) : string =
+    let env_to_string (env : env) : string =
       "[" ^     
       let rec helper (env : env ) : string = 
         (match env with 
@@ -82,7 +82,7 @@ module Env : Env_type =
       in
       (helper env) ^ "]" ;;
 
-    let rec value_to_string ?(printenvp : bool = true) (v : value) : string =
+    let value_to_string ?(printenvp : bool = true) (v : value) : string =
       (* how should i use printevp ???*)  
       match v with
       | Val a -> exp_to_concrete_string a 
@@ -129,10 +129,10 @@ let eval_t (exp : expr) (_env : Env.env) : Env.value =
 let eval_s (exp : expr) (_env : Env.env) : Env.value =
   let rec eval_s_solve (exp : expr) : expr = 
     match exp with 
-      | Var v -> Unassigned (*i think this should raise an error *)
-      | Float f -> exp
-      | Num n -> exp
-      | Bool b -> exp
+      | Var _v -> Unassigned (*i think this should raise an error *)
+      | Float _f -> exp
+      | Num _n -> exp
+      | Bool _b -> exp
       | Unop (uop, e1) -> 
         (match uop with 
         | Negate -> 
@@ -202,8 +202,6 @@ let eval_d (exp : expr) (env : Env.env) : Env.value =
           | Env.Val (Bool boo) -> Env.Val (Bool (not boo)) 
           | _ -> raise (EvalError "Type Error Unary") 
           ) 
-
-        | _ -> eval exp env
         )
     | Binop (bop, e1, e2) ->
         (match eval e1 env, eval e2 env with 
