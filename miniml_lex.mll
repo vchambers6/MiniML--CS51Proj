@@ -46,6 +46,10 @@
 }
 
 let digit = ['0'-'9']
+(* THIS WAS TAKEN FROM THE INTERNET: 
+https://v1.realworldocaml.org/v1/en/html/parsing-with-ocamllex-and-menhir.html*)
+let decimal = digit+ '.' digit*  
+
 let id = ['a'-'z'] ['a'-'z' '0'-'9']*
 let sym = ['(' ')'] | (['+' '-' '*' '.' '=' '~' ';' '<' '>']+)
 
@@ -53,6 +57,10 @@ rule token = parse
   | digit+ as inum
         { let num = int_of_string inum in
           INT num
+        }
+  | decimal+ as idec
+        { let deci = float_of_string idec in
+          DEC deci 
         }
   | id as word
         { try

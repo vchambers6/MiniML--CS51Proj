@@ -71,8 +71,7 @@ module Env : Env_type =
 
     (* Returns a printable string representation of an environment *)
     let rec env_to_string (env : env) : string =
-      "[" ^ 
-      
+      "[" ^     
       let rec helper (env : env ) : string = 
         (match env with 
         | (a, b) :: tl ->  (match !b with 
@@ -129,21 +128,18 @@ let eval_t (exp : expr) (_env : Env.env) : Env.value =
    
 let eval_s (exp : expr) (_env : Env.env) : Env.value =
   let rec eval_s_solve (exp : expr) : expr = 
-    print_endline (exp_to_abstract_string exp); 
     match exp with 
       | Var v -> Unassigned (*i think this should raise an error *)
-      | Num n -> exp 
+      | Float f -> exp
+      | Num n -> exp
       | Bool b -> exp
       | Unop (uop, e1) -> 
         (match uop with 
         | Negate -> 
-            match e1 with 
+            match eval_s_solve e1 with 
             | Num n -> Num (~-n)
+            | Float f -> Float (~-. f)
             | Bool b -> Bool (not b) 
-            | Binop (a, b, c) -> (match eval_s_solve (Binop (a, b, c)) with 
-                | Num n -> Num (~-n)
-                | Bool boo -> Bool (not boo)
-                | _ -> raise (EvalError "Type Error Unary Operator")  )
             | _ -> eval_s_solve e1 ) (* HELP *)
       | Binop (bop, e1, e2) -> 
         (match eval_s_solve e1, eval_s_solve e2 with 
@@ -159,6 +155,14 @@ let eval_s (exp : expr) (_env : Env.env) : Env.value =
             | Equals -> Bool (b1 = b2)
             | LessThan -> Bool (b1 < b2)
             | _ -> raise (EvalError "Type Error") )
+        | Float f1, Float f2 ->
+            (match bop with
+            | Plus -> Float (( +. ) f1 f2)
+            | Minus -> Float (( -. ) f1 f2)
+            | Times -> Float (( *. ) f1 f2)
+            | Equals ->  Bool (f1 = f2)
+            | LessThan -> Bool (f1 < f2) 
+            )
         | _ -> raise (EvalError "Type Error")  
         )
       | Conditional (e1, e2, e3) -> if ((eval_s_solve e1) = (Bool true)) then (eval_s_solve e2) else 
@@ -185,19 +189,91 @@ let eval_s (exp : expr) (_env : Env.env) : Env.value =
    
 
 let eval_d (exp : expr) (env : Env.env) : Env.value = 
-
   let rec eval (exp : expr) (env : Env.env) : Env.value = 
-  print_endline (exp_to_abstract_string exp); 
-  print_endline (Env.env_to_string env);
   match exp with 
     | Var v -> Env.lookup env v 
-    | Num _ | Bool _ | Raise | Unassigned | Fun (_, _) -> Env.Val exp
+    | Num _ | Float _ | Bool _ | Raise | Unassigned | Fun (_, _) -> Env.Val exp
+    | Unop (uop, e1) -> 
+        (match uop with 
+        | Negate ->
+          (match eval e1 env with 
+          | Env.Val (Num n) -> Env.Val (Num (~-n))
+          | Env.Val (Float f) -> Env.Val (Float (~-.f))
+          | Env.Val (Bool boo) -> Env.Val (Bool (not boo)) 
+          | _ -> raise (EvalError "Type Error Unary") 
+          ) 
+
+        | _ -> eval exp env
+        )
+    | Binop (bop, e1, e2) ->
+        (match eval e1 env, eval e2 env with 
+        | Env.Val (Num n1), Env.Val (Num n2) ->
+          (match bop with 
+          | Plus -> Env.Val (Num (( + ) n1 n2))
+          | Minus -> Env.Val (Num (( - ) n1 n2))
+          | Times -> Env.Val (Num (( * ) n1 n2))
+          | Equals -> Env.Val (Bool (n1 = n2))
+          | LessThan -> Env.Val (Bool (n1 < n2))
+          )
+        | Env.Val (Bool b1), Env.Val (Bool b2) ->
+          (match bop with 
+          | Equals -> Env.Val (Bool (b1 = b2))
+          | LessThan -> Env.Val (Bool (b1 < b2))
+          | _ -> raise (EvalError "Binop type error")
+          )
+        | Env.Val (Float f1), Env.Val (Float f2) ->
+            (match bop with
+            | Plus -> Env.Val (Float (( +. ) f1 f2))
+            | Minus -> Env.Val (Float (( -. ) f1 f2))
+            | Times -> Env.Val (Float (( *. ) f1 f2))
+            | Equals ->  Env.Val (Bool (f1 = f2))
+            | LessThan -> Env.Val (Bool (f1 < f2)) 
+            )
+        | _ -> raise (EvalError "Binop type error")
+        )   
+    | Conditional (e1, e2, e3) -> if ((eval e1 env) = (Env.Val (Bool 
+        true))) then (eval e2 env) else (eval e3 env)
+    | Let (v, e1, e2) -> 
+        (match eval e1 env with 
+        | Env.Val v2 -> eval e2 (Env.extend env v (ref (Env.Val v2)))  
+        | Env.Closure _ -> raise (EvalError "Unexpected closure found")
+        | _ -> raise (EvalError "Evaluation error")
+
+        )
+    | Letrec (v, e1, e2) ->
+      (match eval e1 env with 
+      | Env.Val _ -> eval e2 (Env.extend env v ( ref  (eval e1 (Env.extend env v (ref (Env.Val(Letrec (v, e1, e2)))))) ))
+      | Env.Closure _ -> raise (EvalError "Unexpected closure found")
+      )
+    | App (e1, e2) ->
+        (match eval e1 env with 
+        | Env.Val (Fun (v, e3)) -> 
+            (match eval e2 env with 
+            | Env.Val v2 -> eval e3 (Env.extend env v (ref (Env.Val v2))) 
+            | Env.Closure _ -> raise (EvalError "Unexpected closure found")
+            | _ -> raise (EvalError "Evaluation error")
+            )
+        | _ -> raise (EvalError "exp not a fun") 
+        )
+  in 
+  eval exp env ;; 
+       
+(* The LEXICALLY-SCOPED ENVIRONMENT MODEL evaluator -- optionally
+   completed as (part of) your extension *)
+   
+let eval_l (exp : expr) (env : Env.env) : Env.value =
+  
+  let rec eval (exp : expr) (env : Env.env) : Env.value = 
+  match exp with 
+    | Var v -> Env.lookup env v 
+    | Num _ | Float _ | Bool _ | Raise | Unassigned -> Env.Val exp
     | Unop (uop, e1) -> 
         (match uop with 
         | Negate ->(
-          match e1 with 
-          | Num n -> Env.Val (Num ~-n)
-          | Bool boo -> Env.Val (Bool (not boo)) 
+          match eval e1 env with 
+          | Env.Val (Num n) -> Env.Val (Num ~-n)
+          | Env.Val (Float f) -> Env.Val (Float ~-.f)
+          | Env.Val (Bool boo) -> Env.Val (Bool (not boo)) 
           | _ -> raise (EvalError "Type Error Unary") ) 
 
         | _ -> eval exp env)
@@ -217,41 +293,56 @@ let eval_d (exp : expr) (env : Env.env) : Env.value =
           | LessThan -> Env.Val (Bool (b1 < b2))
           | _ -> raise (EvalError "Binop type error")
           )
-        | _ -> raise (EvalError "wrong")
+        | Env.Val (Float f1), Env.Val (Float f2) ->
+            (match bop with
+            | Plus -> Env.Val (Float (( +. ) f1 f2))
+            | Minus -> Env.Val (Float (( -. ) f1 f2))
+            | Times -> Env.Val (Float (( *. ) f1 f2))
+            | Equals ->  Env.Val (Bool (f1 = f2))
+            | LessThan -> Env.Val (Bool (f1 < f2)) 
+            )
+        | _ -> raise (EvalError "Binop type error")
       )
     | Conditional (e1, e2, e3) -> if ((eval e1 env) = (Env.Val (Bool 
         true))) then (eval e2 env) else (eval e3 env)
+    
+    | Fun (v, e1) -> Env.Closure (exp, env)
+
     | Let (v, e1, e2) -> 
         (match eval e1 env with 
         | Env.Val v2 -> eval e2 (Env.extend env v (ref (Env.Val v2)))  
-        | Env.Closure _ -> raise (EvalError "Closure found")
+        | Env.Closure (a, b) -> eval e2 (Env.extend env v (ref (Env.Closure (a,b))))
+        | _ -> raise (EvalError "Evaluation error")
 
         )
     | Letrec (v, e1, e2) ->
-      (match eval e1 env with 
-      | Env.Val _ -> eval e2 (Env.extend env v ( ref  (eval e1 (Env.extend env v (ref (Env.Val(Letrec (v, e1, e2)))))) ))
-      | Env.Closure _ -> raise (EvalError "Closure found")
-      )
-    | App (e1, e2) ->
-        (match eval e1 env with 
+      ( 
+      match eval e1 env with 
+      | Env.Val v2 -> eval e2 (Env.extend env v ( ref (eval e1 (Env.extend env v (ref (Env.Val(v2))))) ))
+      | Env.Closure (a, b) -> eval e2 (Env.extend env v (ref (Env.Closure (a,b))))
+      )  
+   
+    | App(e1, e2) -> 
+        (match eval e1 env with
+        | Env.Closure (Fun (v, e3), cenv) -> 
+            (match eval e2 env with 
+            | Env.Val v2 -> eval e3 (Env.extend cenv v (ref (Env.Val v2)))
+            | Env.Closure clos -> eval e3 (Env.extend cenv v (ref (Env.Closure clos)))
+            | _ -> raise (EvalError "Evaluation error")
+            )
         | Env.Val (Fun (v, e3)) -> 
             (match eval e2 env with 
             | Env.Val v2 -> eval e3 (Env.extend env v (ref (Env.Val v2))) 
-            | Env.Closure _ -> raise (EvalError "nooo")
-            )
-        | _ -> raise (EvalError "nooo") 
-        )
+            | Env.Closure clos -> eval e3 (Env.extend env v (ref (Env.Closure clos)))
+            | _ -> raise (EvalError "Evaluation error")
+           )
+        | _ -> raise (EvalError "exp not a fun"))
   in 
-
-  eval exp env ;; 
-       
-(* The LEXICALLY-SCOPED ENVIRONMENT MODEL evaluator -- optionally
-   completed as (part of) your extension *)
-   
-let eval_l (_exp : expr) (_env : Env.env) : Env.value =
-  failwith "eval_l not implemented" ;;
+  eval exp env ;;
 
 (* The EXTENDED evaluator -- if you want, you can provide your
+
+  
    extension as a separate evaluator, or if it is type- and
    correctness-compatible with one of the above, you can incorporate
    your extensions within eval_s, eval_d, or eval_l. *)
@@ -267,4 +358,4 @@ let eval_e _ =
    above, not the evaluate function, so it doesn't matter how it's set
    when you submit your solution.) *)
    
-let evaluate = eval_d;;
+let evaluate = eval_l;;

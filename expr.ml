@@ -24,6 +24,7 @@ type varid = string ;;
 type expr =
   | Var of varid                         (* variables *)
   | Num of int                           (* integers *)
+  | Float of float                       (* floats *)
   | Bool of bool                         (* booleans *)
   | Unop of unop * expr                  (* unary operators *)
   | Binop of binop * expr * expr         (* binary operators *)
@@ -69,7 +70,8 @@ let free_vars (exp : expr) : varidset =
   let rec get_vars (exp: expr) : varidset = 
     match exp with 
     | Var v -> SS.add v vars
-    | Num n -> SS.empty                      
+    | Num n -> SS.empty  
+    | Float f -> SS.empty                    
     | Bool b -> SS.empty               
     | Unop (_u, e1) -> get_vars e1        
     | Binop (_b, e1, e2) -> SS.union (get_vars e2) (SS.union (get_vars e1) vars)   
@@ -109,7 +111,7 @@ let rec subst (var_name : varid) (repl : expr) (exp : expr) : expr =
   let rec subst_helper (exp : expr) : expr = 
     match exp with  
     | Var v -> if v = var_name then repl else exp
-    | Num _ | Bool _ | Raise | Unassigned -> exp              
+    | Num _ |Float _ | Bool _ | Raise | Unassigned -> exp              
     | Unop (u, e1) -> Unop (u, subst_helper e1)        
     | Binop (b, e1, e2) -> Binop (b, subst_helper e1, subst_helper e2)   
     | Conditional (e1, e2, e3) -> Conditional (subst_helper e1, subst_helper e2, subst_helper e3) 
@@ -152,7 +154,8 @@ let rec subst (var_name : varid) (repl : expr) (exp : expr) : expr =
 let rec exp_to_concrete_string (exp : expr) : string =
   match exp with 
   | Var v -> v ^ " "                       
-  | Num n -> (string_of_int n) ^ " "                           
+  | Num n -> (string_of_int n) ^ " "
+  | Float f ->   (string_of_float f) ^ ". "                         
   | Bool b -> Printf.sprintf "%B " b                         
   | Unop (uop, expr1) -> 
       (match uop with 
@@ -188,7 +191,8 @@ let rec exp_to_concrete_string (exp : expr) : string =
 let rec exp_to_abstract_string (exp : expr) : string =
   match exp with 
   | Var v -> "Var(" ^ v ^ ")"                       
-  | Num n -> Printf.sprintf "Num(%d)" n                         
+  | Num n -> Printf.sprintf "Num(%d)" n  
+  | Float f ->  Printf.sprintf "Num(%f)" f                       
   | Bool b -> Printf.sprintf "Bool(%B)" b                       
   | Unop (uop, expr1) -> 
       (match uop with 
